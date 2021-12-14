@@ -1,0 +1,93 @@
+drop table buytbl; --구매 테이블은 실습에 필요없으므로 삭제
+CREATE TABLE BACKUP_USERTBL(
+USERID CHAR(8) NOT NULL PRIMARY KEY,
+USERNAME NVARCHAR2(10) NOT NULL,
+BIRTHYEAR NUMBER(4) NOT NULL,
+ADDR NCHAR(2) NOT NULL,
+MOBILE1 CHAR(3),
+MOBILE2 CHAR(8),
+HEIGHT NUMBER(3),
+MDATE DATE,
+MODTPE NCHAR(2), --변경된 타임. '수정' 또는 '삭제'
+MODDATE DATE, -- 변경된 날짜
+MODUSER NVARCHAR2(256) --변경한 사용자
+);
+
+CREATE OR REPLACE TRIGGER TRG_BACKUPUSERTBL -- 트래거 이름
+    AFTER UPDATE OR DELETE -- 삭제, 수정 후에 작동하도록 지정
+    ON USERTBL -- 트리거를 부착할 테이블
+    FOR EACH ROW -- 각 행마다 적용됨
+DECLARE
+    V_MODTYPE NCHAR(2); --변경타입(NCHAR(2)로 변경)
+BEGIN
+    IF UPDATING THEN -- 업데이트 되었다면
+        V_MODTYPE := '수정';
+    ELSIF DELETING THEN -- 삭제되었다면
+        V_MODTYPE := '삭제';
+    END IF;
+    -- := OLD 테이블의 내용(변경 전의 내용)을 백업 테이블에 삽입
+    INSERT INTO BACKUP_USERTBL VALUES(:OLD.USERID, :OLD.USERNAME, :OLD.BIRTHYEAR, 
+    :OLD.ADDR, :OLD.MOBILE1, :OLD.MOBILE2, :OLD.HEIGHT, :OLD.MDATE,
+    V_MODTYPE, SYSDATE(), USER() );
+END TRG_BACKUPUSERTBL;
+
+--':OLD 테이블' 이란 UPDATE 또는 DELETE가 수행되기 전의 데이터가 잠깐 저장되어 있는 임시 테이블이라고 생각하면 된다.
+--31행의 USER()는 현재 사용자를 의미하는 함수
+
+UPDATE USERTBL SET ADDR = '몽고' WHERE USERID = 'JKW';
+DELETE USERTBL WHERE HEIGHT >= 177;
+
+SELECT * FROM BACKUP_USERTBL;
+
+TRUNCATE TABLE USERTBL;
+--백업 테이블에 삭제된 내용이 들어가지 않았다. 이유는 TRUNCATE TABLE로 삭제 시에는 트리거가 작동하지 않기 때문이다.
+
+DROP TRIGGER TRG_BACKUPUSERTBL;
+
+SET SERVEROUTPUT ON;
+CREATE OR REPLACE TRIGGER TRG_INSERTUSERTBL
+    AFTER INSERT -- 삽입 후에 작동하도록 지정
+    ON USERTBL
+    FOR EACH ROW
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('데이터의 입력을 시도했습니다.');
+    DBMS_OUTPUT.PUT_LINE('귀하의 정보가 서버에 기록되었습니다.');
+    DBMS_OUTPUT.PUT_LINE('그리고, 입력한 데이터는 적용되지 않았습니다.');
+    RAISE_APPLICATION_ERROR(-20999, '입력 시도 발견 !!!'); --오류를 강제로 발생시키는 함수
+END;
+
+BEGIN
+    INSERT INTO USERTBL VALUES('ABC', '에비씨', 1977, '서울', '011', '1111111', 181, '2019-12-25');
+END;
+DROP TRIGGER TRG_INSERTUSERTBL;
+CREATE OR REPLACE TRIGGER TRG_CHANGEUSERTBL-- 이름 지정
+BEFORE INSERT -- 삽입 전에 작동하도록 지정
+ON USERTBL
+FOR EACH ROW
+BEGIN
+    :NEW.USERNAME := SUBSTR(:NEW.USERNAME, 1, 1) || '00';
+    :NEW.BIRTHYEAR := :NEW.BIRTHYEAR+2333;
+END;
+
+INSERT INTO USERTBL VALUES('ABC', '에비씨', 1977, '서울', '011', '1111111', 181, '2019-12-25');
+SELECT * FROM USERTBL;
+
+--특정 열이 변경되면 작동하는 트리거
+CREATE OR REPLACE TRIGGER TRG_COLUMNCHANGE
+    AFTER UPDATE OF USERNAME -- 이름 열에 업데이트가 작동되면 트리거가 작동되도록 설정
+    ON USERTBL
+    FOR EACH ROW
+BEGIN
+    RAISE_APPLICATION_ERROR(-20888, '이름은 변경이 안됩니다. !!!'); --이름이 변경되지 않도록 사옹자 오류를 발생시켰다.
+END;
+
+UPDATE USERTBL SET ADDR = '우주' WHERE USERID ='ABC';
+UPDATE USERTBL SET USERNAME = '무명씨' WHERE USERID ='ABC';
+
+
+
+
+
+
+
+

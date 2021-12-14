@@ -1,0 +1,1 @@
+select * from memberTBL_view; <!--아까 설정했던 것 처럼 Shop.memberTBL에 있는 이름과 주소만 보여주고 있다-->
